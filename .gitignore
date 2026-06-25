@@ -13,6 +13,9 @@ __pycache__/
 # Claude
 .claude/
 
+# Local settings
+settings.local.json
+
 # OS
 Thumbs.db
 Desktop.ini

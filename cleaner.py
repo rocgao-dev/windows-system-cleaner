@@ -43,13 +43,19 @@ from cleaner.windows_update import (
     clean_delivery_optimization_files, clean_windows_old,
 )
 from cleaner.internet_cache import (
-    clean_ie_cache, clean_edge_cache, clean_chrome_cache, flush_dns_cache,
+    clean_ie_cache, clean_edge_cache, clean_chrome_cache,
+    clean_qq_browser_cache, flush_dns_cache,
 )
 from cleaner.delivery_opt import clean_delivery_optimization
 from cleaner.recycle_bin import empty_recycle_bin, get_recycle_bin_info
 from cleaner.system_temp import (
     clean_cbs_logs, clean_crash_dumps, clean_thumbnail_cache,
     clean_font_cache,
+)
+from cleaner.wps_cleaner import (
+    clean_wps_backup, clean_wps_logs, clean_wps_cache,
+    clean_wps_recent, clean_wps_temp, clean_wps_recovery,
+    clean_wps_cloud_cache,
 )
 
 
@@ -65,6 +71,7 @@ MODULES = [
     ("ie_cache", "IE 浏览器缓存", clean_ie_cache, {}),
     ("edge_cache", "Edge 浏览器缓存", clean_edge_cache, {}),
     ("chrome_cache", "Chrome 浏览器缓存", clean_chrome_cache, {}),
+    ("qq_browser", "QQ 浏览器缓存", clean_qq_browser_cache, {}),
     ("dns", "DNS 缓存刷新", flush_dns_cache, {}),
     ("delivery_opt", "传递优化文件", clean_delivery_optimization, {}),
     ("recycle", "回收站", empty_recycle_bin, {}),
@@ -72,6 +79,13 @@ MODULES = [
     ("crash_dump", "崩溃转储/WER", clean_crash_dumps, {"days_old": 7}),
     ("thumbnail", "缩略图缓存", clean_thumbnail_cache, {}),
     ("font_cache", "字体缓存", clean_font_cache, {}),
+    ("wps_backup", "WPS 文档备份", clean_wps_backup, {"days_old": 3}),
+    ("wps_logs", "WPS 日志文件", clean_wps_logs, {"days_old": 1}),
+    ("wps_cache", "WPS 缓存", clean_wps_cache, {"days_old": 1}),
+    ("wps_recent", "WPS 最近文件列表", clean_wps_recent, {}),
+    ("wps_temp", "WPS 临时文件", clean_wps_temp, {}),
+    ("wps_recovery", "WPS 崩溃恢复", clean_wps_recovery, {"days_old": 3}),
+    ("wps_cloud", "WPS 云文档缓存", clean_wps_cloud_cache, {"days_old": 3}),
 ]
 
 

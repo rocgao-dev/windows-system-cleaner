@@ -15,6 +15,7 @@
 | `ie_cache` | IE 浏览器缓存 | Internet Explorer 缓存 |
 | `edge_cache` | Edge 浏览器缓存 | Microsoft Edge 缓存和 Service Worker |
 | `chrome_cache` | Chrome 浏览器缓存 | Google Chrome 缓存和 Service Worker |
+| `qq_browser` | QQ 浏览器缓存 | QQ 浏览器缓存和 Service Worker |
 | `dns` | DNS 缓存 | 刷新 DNS 解析缓存 |
 | `delivery_opt` | 传递优化文件 | Windows P2P 更新分发缓存 |
 | `recycle` | 回收站 | 清空所有驱动器回收站 |
@@ -22,6 +23,13 @@
 | `crash_dump` | 崩溃转储/WER | 蓝屏转储、崩溃转储、错误报告 |
 | `thumbnail` | 缩略图缓存 | 资源管理器缩略图数据库 |
 | `font_cache` | 字体缓存 | Windows 字体缓存文件 |
+| `wps_backup` | WPS 文档备份 | WPS Office 自动备份文件（.bak） |
+| `wps_logs` | WPS 日志 | WPS Office 运行日志 |
+| `wps_cache` | WPS 缓存 | WPS 字体缓存、加载项缓存等 |
+| `wps_recent` | WPS 最近文件 | 清除最近打开文件历史 |
+| `wps_temp` | WPS 临时文件 | WPS 编辑过程临时文件 |
+| `wps_recovery` | WPS 崩溃恢复 | 异常退出自动恢复文件 |
+| `wps_cloud` | WPS 云文档缓存 | WPS 云文档本地同步缓存 |
 
 ## 安全策略
 
@@ -145,7 +153,8 @@ clear/
     ├── internet_cache.py     # 浏览器缓存清理
     ├── delivery_opt.py       # 传递优化清理
     ├── recycle_bin.py        # 回收站清空
-    └── system_temp.py        # 系统临时文件
+    ├── system_temp.py        # 系统临时文件
+    └── wps_cleaner.py       # WPS Office 垃圾清理
 ```
 
 ## 注意事项
@@ -155,3 +164,10 @@ clear/
 - 清理 Prefetch 后首次启动应用会稍慢
 - 清空回收站操作不可撤销
 - 建议首次使用时先运行 `--dry-run` 预览效果
+
+## 版本历史
+
+| 版本 | 日期 | 变更 |
+|------|------|------|
+| **v1.1** | 2026-06-25 | 新增 WPS Office 清理（7 个模块：备份/日志/缓存/最近文件/临时文件/崩溃恢复/云文档缓存）、QQ 浏览器缓存清理；添加 `.gitignore` 忽略本地配置文件 |
+| **v1.0** | 2026-06-25 | 初始版本：16 个清理模块（Temp/Prefetch/DISM/Update/IE/Edge/Chrome/DNS/传递优化/回收站/CBS/崩溃转储/缩略图/字体缓存） |

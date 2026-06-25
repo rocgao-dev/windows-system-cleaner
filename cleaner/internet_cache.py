@@ -155,6 +155,61 @@ def clean_chrome_cache(days_old=1, dry_run=False):
     return total_result
 
 
+def clean_qq_browser_cache(days_old=1, dry_run=False):
+    """清理 QQ 浏览器缓存
+
+    QQ 浏览器基于 Chromium 内核，缓存结构与 Chrome/Edge 类似。
+
+    Args:
+        days_old: 只删除超过指定天数的文件
+        dry_run: 是否为预览模式
+
+    Returns:
+        dict: 清理结果
+    """
+    localappdata = _get_localappdata()
+    qq_base = os.path.join(localappdata, "Tencent", "QQBrowser", "User Data")
+
+    if not os.path.exists(qq_base):
+        logger.info("[QQ浏览器] QQ 浏览器未安装或路径不存在，跳过")
+        return {"deleted_count": 0, "deleted_size": 0, "skipped_count": 0, "dirs_removed": 0}
+
+    logger.info(f"[QQ浏览器] 开始清理: {qq_base}")
+
+    total_result = {"deleted_count": 0, "deleted_size": 0, "skipped_count": 0, "dirs_removed": 0}
+
+    cache_dirs = [
+        "Cache", "Code Cache", "GPUCache", "DawnCache",
+        "Service Worker", "IndexedDB",
+    ]
+
+    qq_size_before = get_size(qq_base)
+
+    try:
+        for item in os.listdir(qq_base):
+            item_path = os.path.join(qq_base, item)
+            if not os.path.isdir(item_path):
+                continue
+
+            for cache_dir in cache_dirs:
+                cache_path = os.path.join(item_path, cache_dir)
+                if os.path.exists(cache_path):
+                    result = safe_rmtree(cache_path, days_old=days_old, dry_run=dry_run)
+                    for key in total_result:
+                        total_result[key] += result[key]
+    except OSError as e:
+        logger.debug(f"QQ浏览器缓存遍历失败: {e}")
+
+    if not dry_run:
+        qq_size_after = get_size(qq_base)
+        logger.info(f"  清理前: {format_size(qq_size_before)}, 清理后: {format_size(qq_size_after)}")
+        logger.info(f"  删除: {total_result['deleted_count']} 个文件, 释放: {format_size(total_result['deleted_size'])}")
+    else:
+        logger.info(f"  [预览] 将删除: {total_result['deleted_count']} 个文件, 释放: {format_size(total_result['deleted_size'])}")
+
+    return total_result
+
+
 def flush_dns_cache(dry_run=False):
     """刷新 DNS 缓存
 
