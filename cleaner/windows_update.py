@@ -34,6 +34,79 @@ def _run_cmd(cmd, timeout=600):
         return -1, "", str(e)
 
 
+def _run_dism_with_progress(cmd_parts, label, timeout=900):
+    """运行 DISM 命令并实时显示进度
+
+    Args:
+        cmd_parts: DISM 命令参数列表（不含 "dism"）
+        label: 日志标签
+        timeout: 超时时间
+
+    Returns:
+        tuple: (returncode, stdout, stderr)
+    """
+    import subprocess
+    import sys
+
+    cmd = ["dism"] + cmd_parts
+    logger.info(f"  运行: {' '.join(cmd)}")
+
+    try:
+        process = subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+        )
+
+        last_progress = -1
+        stdout_lines = []
+
+        for line in iter(process.stdout.readline, ""):
+            stdout_lines.append(line)
+
+            # 解析 DISM 进度 [=== xx.x% ===]
+            if "[" in line and "%" in line:
+                import re as re_mod
+                match = re_mod.search(r"(\d+\.?\d*)%", line)
+                if match:
+                    pct = int(float(match.group(1)))
+                    if pct != last_progress:
+                        last_progress = pct
+                        bar_len = 30
+                        filled = int(bar_len * pct / 100)
+                        bar = "=" * filled + " " * (bar_len - filled)
+                        sys.stdout.write(f"\r    [{bar}] {pct}%")
+                        sys.stdout.flush()
+
+        process.wait()
+        if last_progress >= 0:
+            sys.stdout.write("\n")
+            sys.stdout.flush()
+
+        stdout_text = "".join(stdout_lines)
+
+        if process.returncode == 0:
+            logger.info(f"  [OK] {label}完成")
+            return process.returncode, stdout_text, ""
+        else:
+            logger.warning(f"  [FAIL] {label}失败 (code={process.returncode})")
+            return process.returncode, stdout_text, ""
+
+    except subprocess.TimeoutExpired:
+        process.kill()
+        logger.warning(f"  [TIMEOUT] {label}超时")
+        return -1, "", "命令超时"
+    except FileNotFoundError:
+        logger.warning("  [FAIL] DISM 命令不存在（非 Windows 系统？）")
+        return -1, "", "DISM 不存在"
+    except Exception as e:
+        logger.warning(f"  [FAIL] {label}异常: {e}")
+        return -1, "", str(e)
+
+
 def clean_dism_component_store(dry_run=False):
     """通过 DISM 清理 Windows 组件存储 (WinSxS)
 
@@ -45,41 +118,31 @@ def clean_dism_component_store(dry_run=False):
     Returns:
         dict: 清理结果
     """
-    logger.info("[DISM 组件存储] 开始清理...")
+    from .utils import Colors
+    logger.info(f"{Colors.cyan('[DISM 组件存储]') if hasattr(Colors, 'cyan') else '[DISM 组件存储]'} 开始清理...")
 
     if dry_run:
         logger.info("  [预览] 将运行: DISM /Cleanup-Image /StartComponentCleanup")
-        # 预览模式下无法准确估计，返回估算值
         return {"deleted_count": 0, "deleted_size": 0, "skipped_count": 0, "dirs_removed": 0}
 
     total_freed = 0
 
-    # 1. 清理被取代的组件
-    logger.info("  运行: DISM /Cleanup-Image /StartComponentCleanup")
-    ret, out, err = _run_cmd(
-        "dism /online /cleanup-image /startcomponentcleanup",
+    # 1. 清理被取代的组件（带进度显示）
+    _run_dism_with_progress(
+        ["/online", "/cleanup-image", "/startcomponentcleanup"],
+        "组件存储清理",
         timeout=900,
     )
-    if ret == 0:
-        logger.info("  [OK] 组件存储清理完成")
-        logger.debug(f"    DISM 输出: {out}")
-    else:
-        logger.warning(f"  [FAIL] DISM 组件清理失败: {err}")
-        logger.debug(f"    returncode={ret}")
 
     # 2. 清理 Service Pack 备份
-    logger.info("  运行: DISM /Cleanup-Image /SPSuperseded")
-    ret, out, err = _run_cmd(
-        "dism /online /cleanup-image /spsuperseded",
+    _run_dism_with_progress(
+        ["/online", "/cleanup-image", "/spsuperseded"],
+        "SP 备份清理",
         timeout=900,
     )
-    if ret == 0:
-        logger.info("  [OK] SP 备份清理完成")
-        logger.debug(f"    DISM 输出: {out}")
-    else:
-        logger.debug(f"  SP 备份清理: {err}")
 
-    # 由于 DISM 不直接返回释放的空间，无法精确统计
+    logger.info(f"  {Colors.green('[OK]') if hasattr(Colors, 'green') else '[OK]'} DISM 清理完成")
+
     return {"deleted_count": 0, "deleted_size": total_freed, "skipped_count": 0, "dirs_removed": 0}
 
 

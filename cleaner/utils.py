@@ -315,3 +315,128 @@ def set_console_verbose(verbose=True):
         console_handler.setLevel(logging.DEBUG)
     else:
         console_handler.setLevel(logging.INFO)
+
+
+# ---------------------------------------------------------------------------
+# 彩色输出支持
+# ---------------------------------------------------------------------------
+
+class Colors:
+    """ANSI 颜色常量，自动检测并启用 Windows 终端彩色输出"""
+    _enabled = None
+
+    GREEN = "\033[92m"
+    YELLOW = "\033[93m"
+    RED = "\033[91m"
+    CYAN = "\033[96m"
+    BOLD = "\033[1m"
+    RESET = "\033[0m"
+
+    @classmethod
+    def _enable(cls):
+        """启用 Windows 10+ ANSI 支持"""
+        try:
+            import ctypes
+            kernel32 = ctypes.windll.kernel32
+            kernel32.SetConsoleMode(
+                kernel32.GetStdHandle(-11),
+                0x0004 | 0x0001 | 0x0002 | 0x0008,
+            )
+            cls._enabled = True
+        except Exception:
+            cls._enabled = False
+
+    @classmethod
+    def colorize(cls, text, color):
+        if cls._enabled is None:
+            cls._enable()
+        if cls._enabled:
+            return f"{color}{text}{cls.RESET}"
+        return text
+
+    @classmethod
+    def green(cls, text):
+        return cls.colorize(text, cls.GREEN)
+
+    @classmethod
+    def yellow(cls, text):
+        return cls.colorize(text, cls.YELLOW)
+
+    @classmethod
+    def red(cls, text):
+        return cls.colorize(text, cls.RED)
+
+    @classmethod
+    def cyan(cls, text):
+        return cls.colorize(text, cls.CYAN)
+
+    @classmethod
+    def bold(cls, text):
+        return cls.colorize(text, cls.BOLD)
+
+
+# ---------------------------------------------------------------------------
+# 清理模块通用装饰器 — 自动处理：日志 -> 量大小 -> safe_rmtree -> 报告结果
+# ---------------------------------------------------------------------------
+
+def clean_module(label, days_old=None, skip_extensions=None):
+    """装饰器：将返回路径列表的函数包装为标准清理模块
+
+    用法:
+        @clean_module("pip 缓存", days_old=1)
+        def clean_pip_cache(dry_run=False):
+            return ["path/to/cache"]
+
+    Args:
+        label: 模块中文标签
+        days_old: 默认天数阈值（None 表示由 CLI --days 控制）
+        skip_extensions: 跳过的文件扩展名集合
+    """
+    def decorator(func):
+        import functools
+
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            dry_run = kwargs.get("dry_run", False)
+            days = kwargs.get("days_old", days_old or 1)
+            use_days = days_old if days_old is not None else days
+
+            paths = func(*args, **kwargs)
+
+            if not paths:
+                logger.info(f"[{label}] 无需清理")
+                return {"deleted_count": 0, "deleted_size": 0, "skipped_count": 0, "dirs_removed": 0}
+
+            total = {"deleted_count": 0, "deleted_size": 0, "skipped_count": 0, "dirs_removed": 0}
+
+            if isinstance(paths, (str, bytes)):
+                paths = [paths]
+
+            for path in paths:
+                if not os.path.exists(path):
+                    continue
+
+                logger.info(f"[{label}] 清理: {path}")
+                size_before = get_size(path)
+                if size_before > 0:
+                    logger.info(f"  当前大小: {format_size(size_before)}")
+
+                result = safe_rmtree(path, days_old=use_days, dry_run=dry_run,
+                                     skip_extensions=skip_extensions or set())
+                for key in total:
+                    total[key] += result[key]
+
+                if not dry_run:
+                    size_after = get_size(path)
+                    logger.info(f"  清理前: {format_size(size_before)}, "
+                                f"清理后: {format_size(size_after)}")
+                else:
+                    logger.info(f"  [预览] 将释放: {format_size(result['deleted_size'])}")
+
+            if total["deleted_size"] > 0 or total["deleted_count"] > 0:
+                logger.info(f"[{label}] 小计: 删除 {total['deleted_count']} 个文件, "
+                            f"释放 {format_size(total['deleted_size'])}")
+
+            return total
+        return wrapper
+    return decorator

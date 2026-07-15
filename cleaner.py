@@ -57,6 +57,18 @@ from cleaner.wps_cleaner import (
     clean_wps_recent, clean_wps_temp, clean_wps_recovery,
     clean_wps_cloud_cache,
 )
+from cleaner.dev_caches import (
+    clean_pip_cache, clean_npm_cache, clean_yarn_cache,
+    clean_huggingface_cache, clean_ollama_models,
+    clean_nuget_cache,
+)
+from cleaner.browser_caches import (
+    clean_firefox_cache, clean_brave_cache, clean_opera_cache,
+    clean_sogou_cache, clean_360_cache,
+)
+from cleaner.app_caches import (
+    clean_bilibili_cache, clean_baidunetdisk_cache,
+)
 
 
 # 定义所有清理模块
@@ -86,6 +98,25 @@ MODULES = [
     ("wps_temp", "WPS 临时文件", clean_wps_temp, {}),
     ("wps_recovery", "WPS 崩溃恢复", clean_wps_recovery, {"days_old": 3}),
     ("wps_cloud", "WPS 云文档缓存", clean_wps_cloud_cache, {"days_old": 3}),
+
+    # ---- 开发者缓存（v2.0） ----
+    ("pip_cache", "pip 下载缓存", clean_pip_cache, {}),
+    ("npm_cache", "npm 全局缓存", clean_npm_cache, {}),
+    ("yarn_cache", "yarn 包缓存", clean_yarn_cache, {}),
+    ("huggingface", "HuggingFace 模型缓存", clean_huggingface_cache, {}),
+    ("ollama", "Ollama 本地模型", clean_ollama_models, {}),
+    ("nuget", "NuGet 缓存", clean_nuget_cache, {}),
+
+    # ---- 额外浏览器缓存（v2.0） ----
+    ("firefox", "Firefox 缓存", clean_firefox_cache, {}),
+    ("brave", "Brave 缓存", clean_brave_cache, {}),
+    ("opera", "Opera 缓存", clean_opera_cache, {}),
+    ("sogou", "搜狗浏览器缓存", clean_sogou_cache, {}),
+    ("browser_360", "360 浏览器缓存", clean_360_cache, {}),
+
+    # ---- 应用缓存（v2.0） ----
+    ("bilibili", "Bilibili 缓存", clean_bilibili_cache, {}),
+    ("baidunetdisk", "百度网盘缓存", clean_baidunetdisk_cache, {}),
 ]
 
 
@@ -138,6 +169,10 @@ def parse_args():
         help="跳过确认提示（适合定时任务/脚本调用）",
     )
     parser.add_argument(
+        "--yes", "-y", action="store_true",
+        help="全自动模式：等价于 --quiet --no-confirm --days 1 的快捷方式",
+    )
+    parser.add_argument(
         "--list-modules", action="store_true",
         help="列出所有可用的清理模块",
     )
@@ -147,11 +182,31 @@ def parse_args():
 
 def list_modules():
     """列出所有清理模块"""
-    print("\n可用的清理模块：")
+    from cleaner.utils import Colors
+
+    groups = [
+        ("系统临时文件", ["temp_win", "temp_user", "prefetch"]),
+        ("Windows 更新", ["dism", "sw_dist", "win_old", "delivery_opt"]),
+        ("浏览器缓存", ["ie_cache", "edge_cache", "chrome_cache", "qq_browser", "firefox", "brave", "opera", "sogou", "browser_360"]),
+        ("系统组件", ["dns", "recycle", "cbs_logs", "crash_dump", "thumbnail", "font_cache"]),
+        ("WPS Office", ["wps_backup", "wps_logs", "wps_cache", "wps_recent", "wps_temp", "wps_recovery", "wps_cloud"]),
+        ("开发者缓存", ["pip_cache", "npm_cache", "yarn_cache", "huggingface", "ollama", "nuget"]),
+        ("应用缓存", ["bilibili", "baidunetdisk"]),
+    ]
+
+    mod_map = {m[0]: m[1] for m in MODULES}
+
+    print(f"\n{Colors.bold('可用的清理模块') if Colors else '可用的清理模块'}")
     print(f"{'名称':<20} {'说明':<30}")
     print("-" * 52)
-    for name, label, _, _ in MODULES:
-        print(f"  {name:<18} {label}")
+
+    for group_name, mods in groups:
+        print(f"  {Colors.cyan('[' + group_name + ']') if Colors else '  [' + group_name + ']'}")
+        for name in mods:
+            label = mod_map.get(name, "")
+            if label:
+                print(f"    {name:<18} {label}")
+    print()
 
 
 def run_module(module_tuple, days_old, dry_run, quiet):
@@ -207,7 +262,7 @@ def main():
 
     # 打印标题
     print("=" * 60)
-    print("  Windows 系统垃圾清理工具 v1.0")
+    print("  Windows 系统垃圾清理工具 v2.0")
     print("=" * 60)
 
     # 检查管理员权限
@@ -225,6 +280,12 @@ def main():
         else:
             print("  将以普通权限继续...")
             print()
+
+    # --yes 模式：全自动，不交互
+    if args.yes:
+        args.quiet = True
+        args.no_confirm = True
+        args.days = args.days if args.days != 1 else 1
 
     # 解析 --skip 和 --only
     skip_list = [s.strip() for s in args.skip.split(",") if s.strip()]

@@ -12,6 +12,9 @@ Windows system junk cleaner — a Python CLI tool that safely removes temp files
 # Interactive run (requires admin)
 python cleaner.py
 
+# Full auto mode — quiet, no confirm, runs everything (v2.0)
+python cleaner.py --yes
+
 # Dry-run preview — always run this first when adding/editing a cleaning module
 python cleaner.py --dry-run --no-confirm
 
@@ -24,7 +27,7 @@ python cleaner.py --only temp_win,temp_user
 # Skip specific modules
 python cleaner.py --skip recycle,dism
 
-# List all registered modules
+# List all registered modules (grouped by category, v2.0)
 python cleaner.py --list-modules
 
 # Save report to file
@@ -35,6 +38,9 @@ run.bat
 
 # Update the scheduled task (edit path on line 3 first)
 powershell -ExecutionPolicy Bypass -File update_task.ps1
+
+# Run tests
+python tests/test_utils.py
 ```
 
 ## Architecture
@@ -42,17 +48,22 @@ powershell -ExecutionPolicy Bypass -File update_task.ps1
 ```
 cleaner.py              # CLI entry point — argument parsing, module dispatch, report orchestration
 cleaner/
-├── __init__.py          # Package init, version
-├── utils.py             # Shared utilities: logging setup, safe_delete, safe_rmtree, format_size,
-│                        #   is_admin, get_disk_free, is_file_locked, console verbosity control
-├── report.py            # CleanupReport class — aggregates per-module results, prints summary, saves to file
+├── __init__.py          # Package init, version v2.0.0
+├── utils.py             # Shared utilities + Colors class + clean_module decorator
+├── report.py            # CleanupReport class
 ├── temp_files.py        # clean_windows_temp, clean_user_temp, clean_prefetch
-├── windows_update.py    # clean_dism_component_store, clean_software_distribution,
-│                        #   clean_delivery_optimization_files, clean_windows_old
-├── internet_cache.py    # clean_ie_cache, clean_edge_cache, clean_chrome_cache, flush_dns_cache
-├── delivery_opt.py      # clean_delivery_optimization, clean_windows_temp_delivery_files
-├── recycle_bin.py       # empty_recycle_bin (via Win32 SHEmptyRecycleBinW), get_recycle_bin_info
-└── system_temp.py       # clean_cbs_logs, clean_crash_dumps, clean_thumbnail_cache, clean_font_cache
+├── windows_update.py    # DISM with progress bar, clean_software_distribution, clean_windows_old
+├── internet_cache.py    # IE/Edge/Chrome/QQ browser cache, DNS flush
+├── browser_caches.py    # Firefox/Brave/Opera/Sogou/360 browser cache  ★ NEW
+├── delivery_opt.py      # Delivery Optimization cleanup
+├── recycle_bin.py       # empty_recycle_bin via SHEmptyRecycleBinW
+├── system_temp.py       # CBS logs, crash dumps, thumbnails, font cache
+├── wps_cleaner.py       # WPS Office (7 modules)
+├── dev_caches.py        # pip/npm/yarn/HuggingFace/Ollama/NuGet  ★ NEW
+└── app_caches.py        # Bilibili/BaiduNetdisk (cache only)  ★ NEW
+tests/
+├── __init__.py
+└── test_utils.py        # 13 unit tests for utils.py  ★ NEW
 ```
 
 ## Module pattern
@@ -64,6 +75,7 @@ Every cleaning module follows a uniform contract:
 3. **Atomicity**: each module is independent; a failure in one does not stop others.
 4. **Logging**: use `from .utils import logger` (not `print`). Modules log at `logger.info` level by default; `logger.debug` for per-file details.
 5. **Dry-run**: must be respected throughout — when `True`, log intent but perform zero deletions.
+6. **Decorator shortcut (v2.0)**: For simple modules that only return a list of paths to clean, use `@clean_module(label, days_old=N)` from `utils.py`. The decorator handles logging, size measurement, safe_rmtree, and result reporting automatically.
 
 ## Adding a new cleaning module
 
@@ -82,7 +94,10 @@ Every cleaning module follows a uniform contract:
 - **Read-only file handling**: `safe_delete` calls `os.chmod(filepath, stat.S_IWRITE)` before `os.remove`.
 - **Admin detection at startup**: `is_admin()` via `ctypes.windll.shell32.IsUserAnAdmin`. Non-admin runs warn but allow continuation (most modules will just skip inaccessible paths).
 - **Dual logging**: console gets INFO+ (configurable via `--quiet`/`--verbose`), `cleaner.log` always gets DEBUG+ for audit trail.
-- **DISM and shell commands**: run via `subprocess.run` with generous timeouts (600–900s). Not cancellable mid-flight.
+- **DISM with progress (v2.0)**: `_run_dism_with_progress()` parses DISM's stdout to show a real-time `[==== xx% ====]` progress bar instead of blocking silently.
+- **Color output (v2.0)**: `Colors` class auto-enables Windows 10+ ANSI/VT support via `SetConsoleMode` and provides green/red/yellow/cyan helpers.
+- **`@clean_module` decorator (v2.0)**: Reduces boilerplate for simple path-cleaning modules. The decorator handles logging, size measurement, `safe_rmtree`, and result reporting — the function just returns a list of paths.
+- **`--yes` mode (v2.0)**: Shortcut for `--quiet --no-confirm` — fully automatic, no prompts.
 - **Recycle bin**: uses `SHEmptyRecycleBinW` with `SHERB_NOCONFIRMATION | SHERB_NOPROGRESSUI | SHERB_NOSOUND` flags — silent, no dialog.
 
 ## Scheduled task
