@@ -263,3 +263,136 @@ def clean_event_logs(dry_run=False):
         pass
 
     return total_result
+
+
+def clean_windows_logs(days_old=7, dry_run=False):
+    """清理 Windows 系统日志目录 (C:\\Windows\\Logs)
+
+    清理除 CBS 子目录外的所有系统日志文件，包括：
+    - Windows Update 日志
+    - 组件安装日志
+    - 各种系统服务日志
+
+    CBS 日志由 clean_cbs_logs 单独处理（更严格的过滤规则）。
+
+    Args:
+        days_old: 只删除超过指定天数的日志文件（默认 7 天）
+        dry_run: 是否为预览模式
+
+    Returns:
+        dict: 清理结果
+    """
+    windir = os.environ.get("WINDIR", "C:\\Windows")
+    logs_path = os.path.join(windir, "Logs")
+
+    if not os.path.exists(logs_path):
+        logger.info("[系统日志] 路径不存在，跳过")
+        return {"deleted_count": 0, "deleted_size": 0, "skipped_count": 0, "dirs_removed": 0}
+
+    logger.info(f"[系统日志] 开始清理: {logs_path}")
+    size_before = get_size(logs_path)
+    logger.info(f"  当前总大小: {format_size(size_before)}")
+
+    total_result = {"deleted_count": 0, "deleted_size": 0, "skipped_count": 0, "dirs_removed": 0}
+
+    # 遍历 Logs 下的所有子目录，跳过 CBS（由专门模块处理）
+    try:
+        for item in os.listdir(logs_path):
+            item_path = os.path.join(logs_path, item)
+            # CBS 目录单独处理，跳过
+            if item.lower() == "cbs" and os.path.isdir(item_path):
+                logger.debug("  跳过 CBS 子目录（由 CBS 日志模块单独处理）")
+                continue
+
+            if os.path.isdir(item_path):
+                result = safe_rmtree(item_path, days_old=days_old, dry_run=dry_run)
+                for key in total_result:
+                    total_result[key] += result[key]
+            elif os.path.isfile(item_path):
+                # 根目录下的单个日志文件
+                try:
+                    mtime = os.path.getmtime(item_path)
+                    from datetime import datetime, timedelta
+                    cutoff = (datetime.now() - timedelta(days=days_old)).timestamp()
+                    if mtime <= cutoff:
+                        success, size = safe_delete(item_path, dry_run=dry_run)
+                        if success:
+                            total_result["deleted_count"] += 1
+                            total_result["deleted_size"] += size
+                        else:
+                            total_result["skipped_count"] += 1
+                    else:
+                        total_result["skipped_count"] += 1
+                except OSError:
+                    total_result["skipped_count"] += 1
+    except OSError as e:
+        logger.warning(f"  遍历日志目录失败: {e}")
+
+    if not dry_run:
+        size_after = get_size(logs_path)
+        logger.info(f"  清理后大小: {format_size(size_after)}")
+        logger.info(f"  删除: {total_result['deleted_count']} 个文件, 释放: {format_size(total_result['deleted_size'])}")
+    else:
+        logger.info(f"  [预览] 将删除: {total_result['deleted_count']} 个文件, 释放: {format_size(total_result['deleted_size'])}")
+
+    return total_result
+
+
+def clean_defender_cache(days_old=7, dry_run=False):
+    """清理 Windows Defender 缓存和扫描历史
+
+    清理内容：
+    - 扫描历史记录 (Scans/History)
+    - 支持日志文件 (Support)
+    - 临时扫描文件
+
+    注意：不会删除病毒定义文件，只清理历史和缓存。
+
+    Args:
+        days_old: 只删除超过指定天数的文件（默认 7 天）
+        dry_run: 是否为预览模式
+
+    Returns:
+        dict: 清理结果
+    """
+    programdata = os.environ.get("PROGRAMDATA", "C:\\ProgramData")
+    defender_base = os.path.join(programdata, "Microsoft", "Windows Defender")
+
+    if not os.path.exists(defender_base):
+        logger.info("[Defender 缓存] 未安装或路径不存在，跳过")
+        return {"deleted_count": 0, "deleted_size": 0, "skipped_count": 0, "dirs_removed": 0}
+
+    logger.info("[Defender 缓存] 开始清理...")
+
+    # 需要清理的子目录
+    cleanup_paths = [
+        os.path.join(defender_base, "Scans", "History"),  # 扫描历史
+        os.path.join(defender_base, "Support"),            # 支持日志
+        os.path.join(defender_base, "Scans", "Cache"),     # 扫描缓存（如存在）
+    ]
+
+    total_result = {"deleted_count": 0, "deleted_size": 0, "skipped_count": 0, "dirs_removed": 0}
+
+    for path in cleanup_paths:
+        if not os.path.exists(path):
+            continue
+
+        logger.info(f"  清理: {path}")
+        size_before = get_size(path)
+        if size_before > 0:
+            logger.info(f"    当前大小: {format_size(size_before)}")
+
+        result = safe_rmtree(path, days_old=days_old, dry_run=dry_run)
+        for key in total_result:
+            total_result[key] += result[key]
+
+        if not dry_run:
+            size_after = get_size(path)
+            logger.info(f"    释放: {format_size(size_before - size_after)}")
+        else:
+            logger.info(f"    [预览] 将释放: {format_size(result['deleted_size'])}")
+
+    logger.info(f"[Defender 缓存] 小计: 删除 {total_result['deleted_count']} 个文件, "
+                f"释放 {format_size(total_result['deleted_size'])}")
+
+    return total_result

@@ -12,6 +12,8 @@
 | `dism` | Windows 组件存储 | 通过 DISM 清理 WinSxS 冗余组件（带进度显示） |
 | `sw_dist` | `SoftwareDistribution\Download` | Windows Update 下载包 |
 | `win_old` | `C:\Windows.old` | 旧版 Windows 备份（清理后无法回滚） |
+| `system_restore` | 系统还原点 | 清理旧的卷影副本，默认保留最新 1 个（v2.1 新增） |
+| `old_drivers` | 旧驱动程序包 | 通过 DISM 清理被取代的驱动包（v2.1 新增） |
 | `ie_cache` | IE 浏览器缓存 | Internet Explorer 缓存 |
 | `edge_cache` | Edge 浏览器缓存 | Microsoft Edge 缓存和 Service Worker |
 | `chrome_cache` | Chrome 浏览器缓存 | Google Chrome 缓存和 Service Worker |
@@ -25,9 +27,12 @@
 | `delivery_opt` | 传递优化文件 | Windows P2P 更新分发缓存 |
 | `recycle` | 回收站 | 清空所有驱动器回收站 |
 | `cbs_logs` | CBS 日志 | 组件服务日志文件 |
+| `win_logs` | 系统日志目录 | `C:\Windows\Logs` 全目录日志（CBS 除外，v2.1 新增） |
+| `event_logs` | 事件日志备份 | Windows 事件日志的备份/存档文件（v2.1 新增） |
 | `crash_dump` | 崩溃转储/WER | 蓝屏转储、崩溃转储、错误报告 |
 | `thumbnail` | 缩略图缓存 | 资源管理器缩略图数据库 |
 | `font_cache` | 字体缓存 | Windows 字体缓存文件 |
+| `defender` | Defender 缓存 | Windows Defender 扫描历史和支持日志（v2.1 新增） |
 | `wps_backup` | WPS 文档备份 | WPS Office 自动备份文件（.bak） |
 | `wps_logs` | WPS 日志 | WPS Office 运行日志 |
 | `wps_cache` | WPS 缓存 | WPS 字体缓存、加载项缓存等 |
@@ -192,6 +197,7 @@ cleaner/
 
 | 版本 | 日期 | 变更 |
 |------|------|------|
+| **v2.1** | 2026-07-20 | 新增 5 个清理模块：系统日志目录、事件日志备份、Defender 缓存、系统还原点清理、旧驱动程序包清理；启用已实现但未注册的事件日志模块 |
 | **v2.0** | 2026-07-15 | 新增 13 个清理模块（6 个开发者缓存 + 5 个浏览器 + 2 个应用缓存）；新增 `--yes` 全自动模式；新增 DISM 进度条显示；新增彩色输出；新增 `@clean_module` 装饰器减少模板代码；新增单元测试（13 个测试） |
 | **v1.1** | 2026-06-25 | 新增 WPS Office 清理（7 个模块：备份/日志/缓存/最近文件/临时文件/崩溃恢复/云文档缓存）、QQ 浏览器缓存清理；添加 `.gitignore` 忽略本地配置文件 |
 | **v1.0** | 2026-06-25 | 初始版本：16 个清理模块（Temp/Prefetch/DISM/Update/IE/Edge/Chrome/DNS/传递优化/回收站/CBS/崩溃转储/缩略图/字体缓存） |

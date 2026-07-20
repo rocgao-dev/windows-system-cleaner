@@ -41,6 +41,7 @@ from cleaner.temp_files import clean_windows_temp, clean_user_temp, clean_prefet
 from cleaner.windows_update import (
     clean_dism_component_store, clean_software_distribution,
     clean_delivery_optimization_files, clean_windows_old,
+    clean_system_restore_points, clean_old_drivers,
 )
 from cleaner.internet_cache import (
     clean_ie_cache, clean_edge_cache, clean_chrome_cache,
@@ -50,7 +51,8 @@ from cleaner.delivery_opt import clean_delivery_optimization
 from cleaner.recycle_bin import empty_recycle_bin, get_recycle_bin_info
 from cleaner.system_temp import (
     clean_cbs_logs, clean_crash_dumps, clean_thumbnail_cache,
-    clean_font_cache,
+    clean_font_cache, clean_event_logs, clean_windows_logs,
+    clean_defender_cache,
 )
 from cleaner.wps_cleaner import (
     clean_wps_backup, clean_wps_logs, clean_wps_cache,
@@ -80,6 +82,8 @@ MODULES = [
     ("dism", "DISM 组件存储", clean_dism_component_store, {}),
     ("sw_dist", "SoftwareDistribution", clean_software_distribution, {}),
     ("win_old", "Windows.old", clean_windows_old, {}),
+    ("system_restore", "系统还原点", clean_system_restore_points, {}),
+    ("old_drivers", "旧驱动程序包", clean_old_drivers, {}),
     ("ie_cache", "IE 浏览器缓存", clean_ie_cache, {}),
     ("edge_cache", "Edge 浏览器缓存", clean_edge_cache, {}),
     ("chrome_cache", "Chrome 浏览器缓存", clean_chrome_cache, {}),
@@ -88,9 +92,12 @@ MODULES = [
     ("delivery_opt", "传递优化文件", clean_delivery_optimization, {}),
     ("recycle", "回收站", empty_recycle_bin, {}),
     ("cbs_logs", "CBS 日志", clean_cbs_logs, {"days_old": 7}),
+    ("win_logs", "系统日志目录", clean_windows_logs, {"days_old": 7}),
+    ("event_logs", "事件日志备份", clean_event_logs, {}),
     ("crash_dump", "崩溃转储/WER", clean_crash_dumps, {"days_old": 7}),
     ("thumbnail", "缩略图缓存", clean_thumbnail_cache, {}),
     ("font_cache", "字体缓存", clean_font_cache, {}),
+    ("defender", "Defender 缓存", clean_defender_cache, {"days_old": 7}),
     ("wps_backup", "WPS 文档备份", clean_wps_backup, {"days_old": 3}),
     ("wps_logs", "WPS 日志文件", clean_wps_logs, {"days_old": 1}),
     ("wps_cache", "WPS 缓存", clean_wps_cache, {"days_old": 1}),
@@ -186,9 +193,9 @@ def list_modules():
 
     groups = [
         ("系统临时文件", ["temp_win", "temp_user", "prefetch"]),
-        ("Windows 更新", ["dism", "sw_dist", "win_old", "delivery_opt"]),
+        ("Windows 更新", ["dism", "sw_dist", "win_old", "delivery_opt", "system_restore", "old_drivers"]),
         ("浏览器缓存", ["ie_cache", "edge_cache", "chrome_cache", "qq_browser", "firefox", "brave", "opera", "sogou", "browser_360"]),
-        ("系统组件", ["dns", "recycle", "cbs_logs", "crash_dump", "thumbnail", "font_cache"]),
+        ("系统组件", ["dns", "recycle", "cbs_logs", "win_logs", "event_logs", "crash_dump", "thumbnail", "font_cache", "defender"]),
         ("WPS Office", ["wps_backup", "wps_logs", "wps_cache", "wps_recent", "wps_temp", "wps_recovery", "wps_cloud"]),
         ("开发者缓存", ["pip_cache", "npm_cache", "yarn_cache", "huggingface", "ollama", "nuget"]),
         ("应用缓存", ["bilibili", "baidunetdisk"]),
@@ -262,7 +269,7 @@ def main():
 
     # 打印标题
     print("=" * 60)
-    print("  Windows 系统垃圾清理工具 v2.0")
+    print("  Windows 系统垃圾清理工具 v2.1")
     print("=" * 60)
 
     # 检查管理员权限

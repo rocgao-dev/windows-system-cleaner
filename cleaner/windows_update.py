@@ -255,3 +255,92 @@ def clean_windows_old(dry_run=False):
     except Exception as e:
         logger.warning(f"  [FAIL] 删除 Windows.old 失败: {e}")
         return {"deleted_count": 0, "deleted_size": 0, "skipped_count": 0, "dirs_removed": 0}
+
+
+def clean_system_restore_points(dry_run=False, keep_latest=1):
+    """清理旧的系统还原点（卷影副本）
+
+    默认保留最新的 N 个还原点，删除其余旧的。
+
+    Args:
+        dry_run: 是否为预览模式
+        keep_latest: 保留最新的还原点数量（默认 1 个）
+
+    Returns:
+        dict: 清理结果
+    """
+    from .utils import Colors
+    logger.info(f"{Colors.cyan('[系统还原点]') if hasattr(Colors, 'cyan') else '[系统还原点]'} 开始检查...")
+
+    # 先列出所有还原点
+    code, stdout, stderr = _run_cmd("vssadmin list shadows")
+    if code != 0:
+        logger.warning("  无法获取还原点列表（可能需要管理员权限或系统未启用）")
+        return {"deleted_count": 0, "deleted_size": 0, "skipped_count": 0, "dirs_removed": 0}
+
+    # 统计还原点数量
+    shadow_count = stdout.count("影子副本 ID")
+    if shadow_count == 0:
+        logger.info("  没有系统还原点，无需清理")
+        return {"deleted_count": 0, "deleted_size": 0, "skipped_count": 0, "dirs_removed": 0}
+
+    logger.info(f"  当前共有 {shadow_count} 个系统还原点")
+    logger.info(f"  保留最新的 {keep_latest} 个，删除其余 {max(0, shadow_count - keep_latest)} 个")
+
+    if dry_run:
+        logger.info("  [预览] 将删除旧的系统还原点")
+        return {"deleted_count": max(0, shadow_count - keep_latest), "deleted_size": 0,
+                "skipped_count": 0, "dirs_removed": 0}
+
+    if shadow_count <= keep_latest:
+        logger.info("  还原点数量不超过保留数，无需清理")
+        return {"deleted_count": 0, "deleted_size": 0, "skipped_count": 0, "dirs_removed": 0}
+
+    # 逐个删除最旧的，直到保留 keep_latest 个
+    deleted = 0
+    for i in range(shadow_count - keep_latest):
+        code, _, _ = _run_cmd("vssadmin delete shadows /for=C: /oldest /quiet", timeout=120)
+        if code == 0:
+            deleted += 1
+            logger.info(f"  已删除第 {deleted} 个旧还原点")
+        else:
+            logger.warning("  删除还原点失败")
+            break
+
+    logger.info(f"  {Colors.green('[OK]') if hasattr(Colors, 'green') else '[OK]'} "
+                f"共删除 {deleted} 个系统还原点")
+
+    return {"deleted_count": deleted, "deleted_size": 0, "skipped_count": 0, "dirs_removed": 0}
+
+
+def clean_old_drivers(dry_run=False):
+    """清理旧的驱动程序包（通过 DISM 组件存储清理）
+
+    使用 DISM 的 /StartComponentCleanup 清理被取代的驱动包和系统组件。
+    这是微软官方推荐的安全清理方式，不会删除正在使用的驱动。
+
+    Args:
+        dry_run: 是否为预览模式
+
+    Returns:
+        dict: 清理结果
+    """
+    from .utils import Colors
+    logger.info(f"{Colors.cyan('[旧驱动包清理]') if hasattr(Colors, 'cyan') else '[旧驱动包清理]'} 开始清理...")
+
+    if dry_run:
+        logger.info("  [预览] 将运行 DISM 清理旧驱动程序包")
+        return {"deleted_count": 0, "deleted_size": 0, "skipped_count": 0, "dirs_removed": 0}
+
+    # 使用 DISM 组件清理，会同时清理被取代的驱动包
+    # /resetbase 参数会彻底清理被取代的组件，清理后无法卸载已安装的更新
+    # 这里只用基础的 /startcomponentcleanup，更安全
+    _run_dism_with_progress(
+        ["/online", "/cleanup-image", "/startcomponentcleanup"],
+        "驱动包与组件清理",
+        timeout=900,
+    )
+
+    logger.info(f"  {Colors.green('[OK]') if hasattr(Colors, 'green') else '[OK]'} 旧驱动包清理完成")
+
+    return {"deleted_count": 0, "deleted_size": 0, "skipped_count": 0, "dirs_removed": 0}
